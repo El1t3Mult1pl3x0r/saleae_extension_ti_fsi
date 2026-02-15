@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum, auto
 
-from saleae.analyzers import AnalyzerFrame, HighLevelAnalyzer, NumberSetting
+from saleae.analyzers import AnalyzerFrame, ChoicesSetting, HighLevelAnalyzer, NumberSetting
 from saleae.data import SaleaeTime
 
 
@@ -60,6 +60,7 @@ class Hla(HighLevelAnalyzer):
         min_value=2,
         max_value=32,
     )
+    config_print_data = ChoicesSetting(label="Print data to Terminal?", choices=["No", "Yes"])
 
     # A list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {  # noqa: RUF012
@@ -97,6 +98,11 @@ class Hla(HighLevelAnalyzer):
             raise ValueError(msg)
         if self.config_amnt_data_lines is not None and self.config_amnt_data_lines == 2:
             self.amnt_data_lines = 2
+
+        # Process print data setting
+        self.print_data = False
+        if self.config_print_data is not None and self.config_print_data == "Yes":
+            self.print_data = True
 
     def decode(self, frame: AnalyzerFrame) -> AnalyzerFrame | None:  # noqa: C901, PLR0912, PLR0915
         """Decode an FSI frame as described in section 12.4.5.4.4 of TI AM243x Technical Reference Manual (SPRUIM2I)."""
@@ -226,6 +232,8 @@ class Hla(HighLevelAnalyzer):
                         self.fsi_frame.postamble = 0b1111
                         self.fb.clear()
                         self.state = FsiState.IDLE
+                        if self.print_data:
+                            print(f"[TI FSI] {' '.join([hex(d) for d in self.fsi_frame.data])}")  # type: ignore[union-attr]
                         # Return analyzerframe
                         return AnalyzerFrame(
                             "ti_fsi_frame",
