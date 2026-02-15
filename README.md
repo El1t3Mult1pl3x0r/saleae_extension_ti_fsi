@@ -1,4 +1,4 @@
-# TI FSI
+# Saleae Extension - TI FSI
 
 A Saleae High-Level Analyzer extension for the TI FSI protocol.
 
