@@ -1,0 +1,13 @@
+{
+  "name": "TI FSI",
+  "apiVersion": "1.0.0",
+  "author": "El1t3Mult1pl3x0r",
+  "version": "1.0.0",
+  "description": "Texas Instruments Fast Serial Interface",
+  "extensions": {
+    "TI FSI": {
+      "type": "HighLevelAnalyzer",
+      "entryPoint": "HighLevelAnalyzer.Hla"
+    }
+  }
+}
