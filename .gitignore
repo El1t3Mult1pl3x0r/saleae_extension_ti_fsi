@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Saleae lib only used for linting
+/saleae
