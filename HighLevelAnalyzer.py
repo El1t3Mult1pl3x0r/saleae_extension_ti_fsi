@@ -123,7 +123,7 @@ class Hla(HighLevelAnalyzer):
             elif bits == 1:
                 self.fb.append(1)
                 self.fb.append(0)
-            if bits == 2:
+            elif bits == 2:
                 self.fb.append(0)
                 self.fb.append(1)
             elif bits == 3:
