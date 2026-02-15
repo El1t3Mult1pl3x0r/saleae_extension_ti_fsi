@@ -1,10 +1,8 @@
 # TI FSI
 
-## Description
+A Saleae High-Level Analyzer extension for the TI FSI protocol.
 
 The Texas Instruments Fast Serial Interface peripheral/protocol is available on some TI MCUs and MPUs (e.g. AM243x, AM64x).
-
-This high level analyzer decodes the messages from this protocol.
 
 ## How to use
 
