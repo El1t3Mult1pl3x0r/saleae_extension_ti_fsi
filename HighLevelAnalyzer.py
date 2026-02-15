@@ -232,7 +232,7 @@ class Hla(HighLevelAnalyzer):
                         self.fsi_frame.postamble = 0b1111
                         self.fb.clear()
                         self.state = FsiState.IDLE
-                        if self.print_data:
+                        if self.print_data and self.fsi_frame.data is not None:
                             print(f"[TI FSI] {' '.join([hex(d) for d in self.fsi_frame.data])}")  # type: ignore[union-attr]
                         # Return analyzerframe
                         return AnalyzerFrame(
@@ -240,13 +240,19 @@ class Hla(HighLevelAnalyzer):
                             self.fsi_frame.start_time,
                             self.fsi_frame.end_time,
                             {
-                                "frame_type": self.fsi_frame.frame_type.name if self.fsi_frame.frame_type else "None",
-                                "user_data": hex(self.fsi_frame.user_data) if self.fsi_frame.user_data else "None",
-                                "data": " ".join(hex(b) for b in self.fsi_frame.data)
-                                if self.fsi_frame.data
+                                "frame_type": self.fsi_frame.frame_type.name
+                                if self.fsi_frame.frame_type is not None
                                 else "None",
-                                "crc": hex(self.fsi_frame.crc) if self.fsi_frame.crc else "None",
-                                "frame_tag": hex(self.fsi_frame.frame_tag) if self.fsi_frame.frame_tag else "None",
+                                "user_data": hex(self.fsi_frame.user_data)
+                                if self.fsi_frame.user_data is not None
+                                else "None",
+                                "data": " ".join(hex(b) for b in self.fsi_frame.data)
+                                if self.fsi_frame.data is not None
+                                else "None",
+                                "crc": hex(self.fsi_frame.crc) if self.fsi_frame.crc is not None else "None",
+                                "frame_tag": hex(self.fsi_frame.frame_tag)
+                                if self.fsi_frame.frame_tag is not None
+                                else "None",
                             },
                         )
                     # Error
