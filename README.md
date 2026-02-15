@@ -13,16 +13,9 @@ This high level analyzer decodes the messages from this protocol.
     1. Select the just created Simple Parallel analyzer as the 'Input analyzer'.
     1. Set the 'Amount of data lines used.' to '1' if only D0 data line is used, if also D1 data line is used, set the value to '2'.
     1. When using the 'DATA_N_WORD' frame type in your FSI implementation, set the correct data length in **bytes** (e.g. 16 words = 32 bytes). Otherwise, leave it at the default.
+    1. If you want to copy the data later, you can set the 'Print data to Terminal?' option to 'Yes'. The FSI data is then printed to the Saleae terminal when the 'Stream to terminal' option is also enabled.
 
-## TODO
+### Noteworthy
 
-* Remove getting started section.
-
-## Getting started
-
-1. Build your extension by updating the Python files for your needs
-2. Create a public Github repo and push your code
-3. Update this README
-4. Open the Logic app and publish your extension
-5. Create a Github release
-6. Debug your hardware like you've never done before :)
+* Corrupt frames are printed to the terminal, the analyzer should recover with the next frame.
+* CRC failures are printed to the terminal and do not break analyzing frames.
