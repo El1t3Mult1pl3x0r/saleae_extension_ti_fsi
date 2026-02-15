@@ -71,6 +71,9 @@ class Hla(HighLevelAnalyzer):
             "CRC: {{data.crc}} | "
             "Frame Tag: {{data.frame_tag}}",
         },
+        "ti_fsi_flush": {
+            "format": "FSI flush sequence",
+        },
     }
 
     def __init__(self) -> None:
@@ -132,7 +135,6 @@ class Hla(HighLevelAnalyzer):
             match self.state:
                 case FsiState.IDLE:
                     self.fsi_frame = FsiFrame(data_len=self.config_data_len if self.config_data_len is not None else 0)  # type: ignore[arg-type]
-                    self.fb.clear()
                     self.start_times.clear()
                     self.state = FsiState.PREAMBLE_SOF
                     continue
@@ -145,6 +147,14 @@ class Hla(HighLevelAnalyzer):
                         self.fb.clear()
                         self.start_times.clear()
                         self.state = FsiState.FRAMETYPE
+                    elif len(self.fb) >= 10 and self.fb[-10:] == [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]:
+                        # Flush sequence detected
+                        self.fsi_frame.start_time = self.start_times[-10]
+                        self.fsi_frame.end_time = frame.start_time
+                        self.fb.clear()
+                        self.state = FsiState.IDLE
+                        # Return analyzerframe for flush sequence
+                        return AnalyzerFrame("ti_fsi_flush", self.fsi_frame.start_time, self.fsi_frame.end_time)
                     break
                 case FsiState.FRAMETYPE:
                     if len(self.fb) < 4:
