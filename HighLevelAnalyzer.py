@@ -12,15 +12,13 @@ from saleae.data import SaleaeTime
 
 class FsiState(StrEnum):
     IDLE = auto()
-    PREAMBLE = auto()
-    SOF = auto()
+    PREAMBLE_SOF = auto()
     FRAMETYPE = auto()
     USERDATA = auto()
     DATA = auto()
     CRC = auto()
     FRAMETAG = auto()
-    EOF = auto()
-    POSTAMBLE = auto()
+    EOF_POSTAMBLE = auto()
 
 
 class FsiFrameType(IntEnum):
@@ -67,11 +65,11 @@ class Hla(HighLevelAnalyzer):
     result_types = {  # noqa: RUF012
         "ti_fsi_frame": {
             "format": "FSI | "
-            "Frame Type: {frame_type} | "
-            "User Data: {user_data} | "
-            "Data: {data} | "
-            "CRC: {crc} | "
-            "Frame Tag: {frame_tag}",
+            "Frame Type: {{data.frame_type}} | "
+            "User Data: {{data.user_data}} | "
+            "Data: {{data.data}} | "
+            "CRC: {{data.crc}} | "
+            "Frame Tag: {{data.frame_tag}}",
         },
     }
 
@@ -81,7 +79,8 @@ class Hla(HighLevelAnalyzer):
         self.fsi_frame = FsiFrame(
             data_len=self.config_data_len if self.config_data_len is not None else 0,  # type: ignore[arg-type]
         )  # type ignore[call-overload]
-        self.fb: list[int] = []  # Init frame buffer to store frames for later
+        self.fb: list[int] = []  # Init frame buffer to store bits for later
+        self.start_times: list[SaleaeTime] = []  # Init start times to have accurate start time after SoF is detected.
 
         # Process amount of data lines setting
         self.amnt_data_lines = 1
@@ -134,25 +133,18 @@ class Hla(HighLevelAnalyzer):
                 case FsiState.IDLE:
                     self.fsi_frame = FsiFrame(data_len=self.config_data_len if self.config_data_len is not None else 0)  # type: ignore[arg-type]
                     self.fb.clear()
-                    self.state = FsiState.PREAMBLE
+                    self.start_times.clear()
+                    self.state = FsiState.PREAMBLE_SOF
                     continue
-                case FsiState.PREAMBLE:
-                    if len(self.fb) >= 4 and self.fb[-4:] == [1, 1, 1, 1]:
-                        self.fsi_frame.start_time = frame.start_time
+                case FsiState.PREAMBLE_SOF:
+                    self.start_times.append(frame.start_time)
+                    if len(self.fb) >= 8 and self.fb[-8:] == [1, 1, 1, 1, 1, 0, 0, 1]:
+                        self.fsi_frame.start_time = self.start_times[-8]
                         self.fsi_frame.preamble = 0b1111
-                        self.fb.clear()
-                        self.state = FsiState.SOF
-                    break
-                case FsiState.SOF:
-                    if len(self.fb) < 4:
-                        break
-                    if self.fb == [1, 0, 0, 1]:
                         self.fsi_frame.sof = 0b1001
                         self.fb.clear()
+                        self.start_times.clear()
                         self.state = FsiState.FRAMETYPE
-                    else:  # Error
-                        self.state = None
-                        continue
                     break
                 case FsiState.FRAMETYPE:
                     if len(self.fb) < 4:
@@ -196,6 +188,15 @@ class Hla(HighLevelAnalyzer):
                     if len(self.fb) < 8:
                         break
                     self.fsi_frame.crc = self._bitlist_to_byte(self.fb)
+                    # Check CRC
+                    crc_bytes = b""
+                    crc_bytes += self.fsi_frame.user_data.to_bytes(1, "little")  # type: ignore[union-attr]
+                    for i in range(0, len(self.fsi_frame.data), 2):  # type: ignore[arg-type]
+                        crc_bytes += self.fsi_frame.data[i + 1].to_bytes(1, "little")  # type: ignore[index]
+                        crc_bytes += self.fsi_frame.data[i].to_bytes(1, "little")  # type: ignore[index]
+                    calc_crc = self._crc8(crc_bytes)
+                    if calc_crc != self.fsi_frame.crc:
+                        print(f"[TI FSI] CRC is incorrect, got: {hex(self.fsi_frame.crc)}, calculated: {hex(calc_crc)}")
                     self.fb.clear()
                     self.state = FsiState.FRAMETAG
                     break
@@ -204,24 +205,14 @@ class Hla(HighLevelAnalyzer):
                         break
                     self.fsi_frame.frame_tag = self._bitlist_to_byte(self.fb)
                     self.fb.clear()
-                    self.state = FsiState.EOF
+                    self.state = FsiState.EOF_POSTAMBLE
                     break
-                case FsiState.EOF:
-                    if len(self.fb) < 4:
+                case FsiState.EOF_POSTAMBLE:
+                    if len(self.fb) < 8:
                         break
-                    if self.fb == [0, 1, 1, 0]:
-                        self.fsi_frame.eof = 0b0110
-                        self.fb.clear()
-                        self.state = FsiState.POSTAMBLE
-                    else:  # Error
-                        self.state = None
-                        continue
-                    break
-                case FsiState.POSTAMBLE:
-                    if len(self.fb) < 4:
-                        break
-                    if self.fb == [1, 1, 1, 1]:
+                    if self.fb == [0, 1, 1, 0, 1, 1, 1, 1]:
                         self.fsi_frame.end_time = frame.start_time
+                        self.fsi_frame.eof = 0b0110
                         self.fsi_frame.postamble = 0b1111
                         self.fb.clear()
                         self.state = FsiState.IDLE
@@ -245,6 +236,7 @@ class Hla(HighLevelAnalyzer):
                     continue
                 case _:
                     print("[TI FSI] State machine in invalid state, frame corrupt!")
+                    print(f"[TI FSI] Corrupt frame: {self.fsi_frame}")
                     self.state = FsiState.IDLE
                     continue
 
@@ -271,3 +263,15 @@ class Hla(HighLevelAnalyzer):
                 byte_val = (byte_val << 1) | bit
             bytelist.append(byte_val)
         return bytelist
+
+    def _crc8(self, data: bytes, poly: int = 0x07, init: int = 0x00) -> int:
+        """Compute an 8-bit CRC (CRC-8) for the given byte sequence."""
+        crc = init
+        for byte in data:
+            crc ^= byte
+            for _ in range(8):
+                if crc & 0x80:  # if the left-most bit is set  # noqa: SIM108
+                    crc = ((crc << 1) ^ poly) & 0xFF
+                else:
+                    crc = (crc << 1) & 0xFF
+        return crc
